@@ -2,9 +2,14 @@ import bpy, mathutils, math, copy
 from collections import deque
 from os import path
 
-# does not use cMesh to extract to x file
-# reads data from blender file to extract to x file
-
+class cUserException(Exception):
+    def __init__(self, error_string, line_number):
+        self.error = error_string
+        self.line = line_number
+        
+    def __str__(self):
+        return self.error + "\n" + str(self.line) + "\n"
+    
 def RemoveWhiteSpace(s):
     if type(s).__name__ == 'str':
         tmp = ''
@@ -15,7 +20,7 @@ def RemoveWhiteSpace(s):
                 tmp += s[i]
         return tmp
 
-def _Indentformat(hfile, indent, s, a):
+def IndentFormat(hfile, indent, s, a):
     arg = 0
     for i in range(0, len(s)):
         if s[i] == '{':
@@ -23,8 +28,7 @@ def _Indentformat(hfile, indent, s, a):
                 if s[i + 1] == '}':
                     arg += 1
     if arg != len(a):
-        print('arguments differ')
-        return False
+        raise(cUserException("Arguments different", 32))
     file_output = ''
     index = 0
     for i in range(0, len(s)):
@@ -54,38 +58,40 @@ def _Indentformat(hfile, indent, s, a):
     hfile.write(file_output)
     return True
 
-def _Indent(hfile, indent, title = None):
+def Indent(hfile, indent, title = None):
     s = ''
     for i in range(0, indent):
         s += '  '
     if title != None:
         s += title
     hfile.write(s)
-"""
-def VectorToFile(hfile, indent, v):
-    format_string = "{}; {}; {};"
-    s = str(v[0]) + str(v[1]) + str(v[2])
-    _Indent(hfile, indent, s)
-    del format_string, s
-"""
 
-def _ExtractMatrixToFile(hfile, indent, matrix, lhc = False, title = None):
-    m = matrix.copy()
+def ExtractMatrixToFile(hfile, indent, matrix, lhc = False, title = None):
+    args = []
     if title == None:
         title = "Matrix4x4 {"
-    _Indent(hfile, indent, title)
-    s = ''
-    for row in m.transposed():
-        s += " {}, {}, {}, {},".format(row[0], row[1], row[2], row[3])
-    for r in range(0, len(s) - 1):
-        hfile.write(s[r])
-    if title == "Matrix4x4 {":
-        s = '; }\n'
+        args.append(title)
     else:
-        s = ';; }\n'
+        args.append(title)
+    format_string = "-{} "
+    IndentFormat(hfile, indent, format_string, args)
+    seperator = deque()
+    for i in range(1, 4):
+        seperator.append(", ")
+    seperator.append(";")
+    for row in matrix.transposed():
+        format_string = "{}{} {}{} {}{} {}{}"
+        args = [str(row.x), ", ", str(row.y), ", ", str(row.z), ", ", str(row.w), seperator.popleft()]
+        IndentFormat(hfile, indent, format_string, args)
+    s = ""
+    if title == "Matrix4x4 {":
+        s = ' }\n'
+    else: #FrameTransformMatrix
+        s = '; }\n'
     hfile.write(s)
+    del args, format_string, seperator, s
 
-def _GetLeftHandCoordinateMatrix(matrix):
+def GetLeftHandCoordinateMatrix(matrix):
     l, r, s = matrix.decompose()
     if type(r).__name__ == "Quaternion":
         r = r.to_euler()
@@ -99,21 +105,21 @@ def _GetLeftHandCoordinateMatrix(matrix):
     matrix = lmat * rmat * smat
     return matrix
 
-def _ExtractMatrices(hfile, indent, matrix, lhc):
+def ExtractMatrices(hfile, indent, matrix, lhc):
     for m in matrix:
         if lhc == False:
-            _ExtractMatrixToFile(hfile, indent, m)
+            ExtractMatrixToFile(hfile, indent, m)
         else:
-            mat = _GetLeftHandCoordinateMatrix(m)
-            _ExtractMatrixToFile(hfile, indent, mat)
+            mat = GetLeftHandCoordinateMatrix(m)
+            ExtractMatrixToFile(hfile, indent, mat)
 
-def _ExtractTextureCoordinateToFile(hfile, indent, obj):
+def ExtractTextureCoordinateToFile(hfile, indent, obj):
     if len(obj.data.uv_layers) == 0:
         return
     format_string = "-{}\n--{}\n"
     uv_layer = obj.data.uv_layers[obj.data.uv_layers.active_index]
     args = ["MeshTextureCoords {", str(len(uv_layer.data)) + ";"]
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
     format_string = ""
     args.clear()
     sep1 = deque()
@@ -126,17 +132,17 @@ def _ExtractTextureCoordinateToFile(hfile, indent, obj):
             v = 1 - uv_layer.data[loop].uv[1]
             format_string += "--{} {}\n"
             args += [str(u) + ';', str(v) + ';' + sep1.popleft()]
-    _Indentformat(hfile, indent, format_string, args)
-    _Indent(hfile, indent, "} // End of MeshTextureCoords\n")
+    IndentFormat(hfile, indent, format_string, args)
+    Indent(hfile, indent, "} // End of MeshTextureCoords\n")
     del format_string, args, sep1
     
-def _ExtractNormalToFile(hfile, indent, obj, lhc):
+def ExtractNormalToFile(hfile, indent, obj, lhc):
     normals = []
     normal_indices = []
     sep1 = deque()
     format_string = "-{}\n+-{}\n"
     args = ["MeshNormals {", str(len(obj.data.polygons)) + ";"]
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
     for i in range(len(obj.data.polygons) - 1):
         sep1.append(',')
     sep1.append(';')
@@ -161,14 +167,14 @@ def _ExtractNormalToFile(hfile, indent, obj, lhc):
                 tmp.append(len(normals) - 1)
             normal_indices.append(tmp)
     indent += 1
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
     format_string = ''
     args.clear()
     for i in range(len(normal_indices) - 1):
         sep1.append(',')
     sep1.append(';')
     sep2 = deque()
-    _Indent(hfile, indent, str(len(normal_indices)) + ';\n')
+    Indent(hfile, indent, str(len(normal_indices)) + ';\n')
     max_index = len(normal_indices)
     for l in normal_indices:
         format_string += "-{}"
@@ -180,62 +186,62 @@ def _ExtractNormalToFile(hfile, indent, obj, lhc):
             format_string += " {}"
             args += [str(l[i]) + sep2.popleft()]
         args[len(args) - 1] += sep1.popleft() + '\n'
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
     indent -= 1
     s = "} // End of MeshNormals" + obj.name + " \n"
-    _Indent(hfile, indent, s)
+    Indent(hfile, indent, s)
     del normal_indices, normals, l, s
 
-def _ExtractMaterials(hfile, indent, obj):
+def ExtractMaterials(hfile, indent, obj):
     s = "MeshMaterialList {\n"
-    _Indent(hfile, indent, s)
+    Indent(hfile, indent, s)
     indent += 1
     s = "{}{}\n".format(len(obj.data.materials), ';')
-    _Indent(hfile, indent, s)
+    Indent(hfile, indent, s)
     s = "{}{}\n".format(len(obj.data.polygons), ';')
-    _Indent(hfile, indent, s)
+    Indent(hfile, indent, s)
     for i, p in enumerate(obj.data.polygons):
         if i != (len(obj.data.polygons) - 1):
             s = "{}{}\n".format(p.material_index, ',')
-            _Indent(hfile, indent, s)
+            Indent(hfile, indent, s)
         else:
             s = str(obj.data.polygons[len(obj.data.polygons) - 1].material_index) + ';\n'
-            _Indent(hfile, indent, s)
+            Indent(hfile, indent, s)
     for m in obj.data.materials:
         s = "Material " + RemoveWhiteSpace(m.name) + " {\n"
-        _Indent(hfile, indent, s)
+        Indent(hfile, indent, s)
         indent += 1
         c = m.diffuse_color
         s = "{}; {}; {}; {};;\n".format(str(c[0]), str(c[1]), str(c[2]), m.alpha)
-        _Indent(hfile, indent, s)
+        Indent(hfile, indent, s)
         c = m.specular_hardness
         s = "{}{}".format(str(c), ';\n')
-        _Indent(hfile, indent, s)
+        Indent(hfile, indent, s)
         c = m.specular_color
         s = "{}; {}; {};;\n".format(str(c[0]), str(c[1]), str(c[2]))
-        _Indent(hfile, indent, s)
+        Indent(hfile, indent, s)
         s = "0.0; 0.0; 0.0;;\n"
-        _Indent(hfile, indent, s)    
+        Indent(hfile, indent, s)    
         if m.active_texture != None:
             if m.active_texture.type == "IMAGE":
                 s = "TextureFilename {\n"
-                _Indent(hfile, indent, s)
+                Indent(hfile, indent, s)
                 p, f = path.split(m.active_texture.image.filepath)
                 if len(f) > 0:
                     s = "{}{}{}\n".format("\"", f, "\";")
                 else:
                     s = "{}{}{}\n".format("\"", m.active_texture.image.filepath, "\";")
-                _Indent(hfile, indent + 1, s)
+                Indent(hfile, indent + 1, s)
                 s = "{}\n".format('} // End of TextureFileName')
-                _Indent(hfile, indent, s)
+                Indent(hfile, indent, s)
         indent -= 1
         s = "{} {}\n".format("} // End of Material", RemoveWhiteSpace(m.name))
-        _Indent(hfile, indent, s)
+        Indent(hfile, indent, s)
     indent -= 1
     s = "} // End of MeshMaterialList\n"
-    _Indent(hfile, indent, s)
+    Indent(hfile, indent, s)
     
-def _GetMatrixOffset(hfile, indent, mesh, bone_name):
+def GetMatrixOffset(hfile, indent, mesh, bone_name):
     mesh_l, mesh_r, mesh_s = mesh.matrix_world.decompose()
     parent = bpy.context.scene.objects[mesh.parent.name]
     if bone_name not in parent.data.bones:
@@ -256,14 +262,14 @@ def _GetMatrixOffset(hfile, indent, mesh, bone_name):
     for row in m:
         for col in row:
             args.append(str(col))
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
     del format_string, args, mesh_l, mesh_r, mesh_s
     del parent, bone_l, bone_r, bone_s
     del parent_l, parent_r, parent_s
     del l, r, s, m, sep
     return True
     
-def _ExtractWeights(hfile, indent, obj):
+def ExtractWeights(hfile, indent, obj):
     s = "\n// mesh weights go here\n\n"
     hfile.write(s)
     if obj.parent == None:
@@ -282,7 +288,7 @@ def _ExtractWeights(hfile, indent, obj):
     for group in weights.keys():
         format_string = "-{}\n--{}{}{};\n"
         args = ["SkinWeights {", "\"", obj.vertex_groups[group].name, "\""]
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, format_string, args)
         indices = []
         weight = []
         format_string = "--{};\n"
@@ -291,7 +297,7 @@ def _ExtractWeights(hfile, indent, obj):
         sep.append(';')
         master = sep.copy()
         args = [str(len(weights[group]))]
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, format_string, args)
         for i, w in weights[group]:
             indices.append(i)
             weight.append(w)
@@ -300,23 +306,23 @@ def _ExtractWeights(hfile, indent, obj):
         for i in indices:
             format_string += "--{}{}\n"
             args += [str(i), sep.popleft()]
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, format_string, args)
         format_string = ""
         args = []
         sep = master.copy()
         for w in weight:
             format_string += "--{}{}\n"
             args += [str(w), sep.popleft()]
-        _Indentformat(hfile, indent, format_string, args)
-        _GetMatrixOffset(hfile, indent, obj, obj.vertex_groups[group].name)
+        IndentFormat(hfile, indent, format_string, args)
+        GetMatrixOffset(hfile, indent, obj, obj.vertex_groups[group].name)
         format_string = "-{} {}\n"
         args = ["}", "// End of SkinWeights"]
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, format_string, args)
         sep.clear()
         master.clear()
     del sep, master, weights, args, format_string
 
-def _ExtractVerticesToFile(hfile, indent, obj, lhc):
+def ExtractVerticesToFile(hfile, indent, obj, lhc):
     if type(obj).__name__ != "Object":
         return False
     v = obj.data.vertices
@@ -330,15 +336,15 @@ def _ExtractVerticesToFile(hfile, indent, obj, lhc):
         for i in range(0, len(v)):
             format_string += '-{}; {}; {};' + sep.popleft() + '\n'
             args.extend([str(v[i].co.x), str(v[i].co.y), str(v[i].co.z * -1)])
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, format_string, args)
     else:
         for i in range(0, len(v)):
             format_string += '-{}; {}; {};' + sep.popleft() + '\n'
             args.extend([str(v[i].co.x), str(v[i].co.y), str(v[i].co.z)])
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, format_string, args)
     del format_string, args, sep, v
     
-def _ExtractMeshPolygons(hfile, indent, obj, lhc):
+def ExtractMeshPolygons(hfile, indent, obj, lhc):
     format_string = '-{};\n'
     args = [str(len(obj.data.polygons))]
     normal_string = '-{} {}\n--{}{}\n'
@@ -377,17 +383,17 @@ def _ExtractMeshPolygons(hfile, indent, obj, lhc):
             face_args.append(str(index))
         format_string += sep2.popleft() + '\n'
         face_string += face_sep2.popleft() + '\n'
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
     face_string += '-{} {}\n'
     face_args.extend(['}', '// End of MeshNormals'])
-    _Indentformat(hfile, indent, normal_string, normal_args)
-    _Indentformat(hfile, indent, face_string, face_args)
+    IndentFormat(hfile, indent, normal_string, normal_args)
+    IndentFormat(hfile, indent, face_string, face_args)
     del normal_string, normal_args
     del format_string, args
     del sep, sep2, normal_sep
     del face_string, face_args
     
-def _ExtractMeshInfoToFile(hfile, obj, matrix, lhc = False):
+def ExtractMeshInfoToFile(hfile, obj, matrix, lhc = False):
     if type(hfile).__name__ != "TextIOWrapper":
         return False
     if type(obj).__name__ != "Object":
@@ -397,31 +403,31 @@ def _ExtractMeshInfoToFile(hfile, obj, matrix, lhc = False):
     indent = 0
     format_string = "-{} {} {}\n+-{}{}\n"
     args = ["Mesh", RemoveWhiteSpace(obj.name), "{", str(len(obj.data.vertices)), ";"]
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
     indent += 1
-    _ExtractVerticesToFile(hfile, indent, obj, lhc)
+    ExtractVerticesToFile(hfile, indent, obj, lhc)
     del format_string
     args.clear()
-    _ExtractMeshPolygons(hfile, indent, obj, lhc)
+    ExtractMeshPolygons(hfile, indent, obj, lhc)
     if len(obj.data.uv_textures) > 0:
         for index, layer in enumerate(obj.data.uv_textures):
             if layer.active == True:
                 uv_layer_active_index = index
-                _ExtractTextureCoordinateToFile(hfile, indent, obj)
+                ExtractTextureCoordinateToFile(hfile, indent, obj)
                 break
         del index, layer, uv_layer_active_index
     if len(obj.material_slots) > 0:
-        _ExtractMaterials(hfile, indent, obj)
+        ExtractMaterials(hfile, indent, obj)
     if len(obj.vertex_groups) > 0 and obj.parent != None:
         if obj.parent.select:
-            _ExtractWeights(hfile, indent, obj)
-    _ExtractMatrices(hfile, indent, matrix, lhc)
+            ExtractWeights(hfile, indent, obj)
+    ExtractMatrices(hfile, indent, matrix, lhc)
     format_string = "} // End of mesh " + RemoveWhiteSpace(obj.name) + "\n\n"
     hfile.write(format_string)
     del format_string
     return True
     
-def _ExtractArmaturesInfoToFile(hfile, armatures, lhc = False):
+def ExtractArmaturesInfoToFile(hfile, armatures, lhc = False):
     if type(hfile).__name__ != "TextIOWrapper":
         return False
     if type(armatures).__name__ != "deque":
@@ -431,22 +437,16 @@ def _ExtractArmaturesInfoToFile(hfile, armatures, lhc = False):
     bone_stack = list()
     indent = 0
     for currarmature in reversed(armatures):
-        _Indent(hfile, indent, "\nFrame " + RemoveWhiteSpace(currarmature) + " {\n")
+        Indent(hfile, indent, "\nFrame " + RemoveWhiteSpace(currarmature) + " {\n")
         a = bpy.context.scene.objects[currarmature]
         if a.children != None:
             for child in a.children:
-                _Indent(hfile, indent, '{' + child.name + '}\n')
-        if lhc:
-            if a.parent != None:
-                matrix = _GetLeftHandCoordinateMatrix(a.matrix_local.copy())
-            else:
-                matrix = a.matrix_world.copy()
-        else:
+                Indent(hfile, indent, "{ " + child.name + " }\n")
             if a.parent != None:
                 matrix = a.matrix_local.copy()
             else:
                 matrix = a.matrix_world.copy()
-        _ExtractMatrixToFile(hfile, indent + 1, matrix, lhc, "FrameTransformMatrix {")
+        ExtractMatrixToFile(hfile, indent + 1, matrix, lhc, "FrameTransformMatrix {")
         #first bone in armature has no parent
         for bone in a.data.bones:
             if bone.parent == None:
@@ -457,24 +457,24 @@ def _ExtractArmaturesInfoToFile(hfile, armatures, lhc = False):
                 indent, currbone, parent = top
             else:
                 indent, s = top
-                _Indent(hfile, indent, s)
+                Indent(hfile, indent, s)
                 continue
-            _Indent(hfile, indent, 'Frame ' + currbone + ' {\n')
-            s = "Vector { " + str(0) + "; " + str(a.data.bones[currbone].length) + "; " + str(0) + ";; }\n"
-            _Indent(hfile, indent + 1, s)
+            Indent(hfile, indent, 'Frame ' + currbone + ' {\n')
+            s = "Vector { " + str(0) + "; " + str(a.data.bones[currbone].length) + "; " + str(0) + "; }\n"
+            Indent(hfile, indent + 1, s)
             if lhc:
-                matrix = _GetLeftHandCoordinateMatrix(a.data.bones[currbone].matrix_local.copy())
-                _ExtractMatrixToFile(hfile, indent + 1, matrix, lhc, "FrameTransformMatrix {")
+                matrix = GetLeftHandCoordinateMatrix(a.data.bones[currbone].matrix_local.copy())
+                ExtractMatrixToFile(hfile, indent + 1, matrix, lhc, "FrameTransformMatrix {")
             else:
-                _ExtractMatrixToFile(hfile, indent + 1, a.data.bones[currbone].matrix_local.copy(), lhc, "FrameTransformMatrix {")
+                ExtractMatrixToFile(hfile, indent + 1, a.data.bones[currbone].matrix_local.copy(), lhc, "FrameTransformMatrix {")
             if len(a.data.bones[currbone].children) > 0:
                 bone_stack.append((indent, '} // End of ' + currbone + '\n'))
                 for child in a.data.bones[currbone].children:
                     bone_stack.append((indent + 1, child.name, child.parent.name))
                 continue
-            _Indent(hfile, indent, '} // End of ' + currbone + '\n')
+            Indent(hfile, indent, '} // End of ' + currbone + '\n')
         indent -= 1
-        _Indent(hfile, indent, '} // End of ' + currarmature + '\n')
+        Indent(hfile, indent, '} // End of ' + currarmature + '\n')
     hfile.write("\n")
 
 def _Rotate(obj):
@@ -491,10 +491,10 @@ def _Scale(obj):
 def _Translate(obj):
     return ("{}; {}, {}, {};", [str(len(obj.location)), str(obj.location[0]), str(obj.location[1]), str(obj.location[2])])
 
-def _ExtractAnimationDataPerFrames(hfile, indent, time, type, sep, name):
+def ExtractAnimationDataPerFrames(hfile, indent, time, type, sep, name):
     format_string = "-{} {}\n+-{};\n-{};\n"
     args = ["AnimationKey", "{", str(type[0]), str(time[1] - time[0])]
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
     obj = bpy.context.scene.objects[name]
     indent += 1
     format_string = ""
@@ -505,14 +505,14 @@ def _ExtractAnimationDataPerFrames(hfile, indent, time, type, sep, name):
         r = type[1](obj) #function call
         format_string += '-{}; ' + r[0] + ';' + sep.popleft() + '\n'
         args.extend(r[1])
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
     indent -= 1
     format_string = "-{} {}\n"
     args.clear()
     args = ["}", "// End of AnimationKey"]
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
 
-def _ExtractMarkers(timelines):
+def ExtractMarkers(timelines):
     if len(bpy.context.scene.timeline_markers) > 0:
         for m in bpy.context.scene.timeline_markers:
             if m.select:
@@ -525,7 +525,7 @@ def _ExtractMarkers(timelines):
     if timelines[len(timelines) - 1][0] != bpy.context.scene.frame_end:
         timelines.append((bpy.context.scene.frame_end, "End"))
         
-def _GetMeshAnimation(hfile, indent, time_slot, obj):
+def GetMeshAnimation(hfile, indent, time_slot, obj):
     format_string = ''
     args = []
     sep1 = deque()
@@ -537,19 +537,19 @@ def _GetMeshAnimation(hfile, indent, time_slot, obj):
     sep2 = copy.copy(sep1)
     format_string += "-{} {} {}\n--{}{}{}\n"
     args.extend(["Animation", time_slot[0][1], '{', '{', obj.name, '}'])
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
     sep2 = copy.copy(sep1)
-    _ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (1, _Scale), sep2, obj.name)
+    ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (1, _Scale), sep2, obj.name)
     sep2 = copy.copy(sep1)
-    _ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (2, _Translate), sep2, obj.name)
+    ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (2, _Translate), sep2, obj.name)
     sep2 = copy.copy(sep1)
     print("Exporting rotation")
-    _ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (0, _Rotate), sep2, obj.name)
+    ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (0, _Rotate), sep2, obj.name)
     del format_string
     format_string = '-{}\n'
     args.clear()
     args.extend(["} // End of Animation"])
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
     del sep1, sep2, format_string, args, total
 
 def GetArmatureAnimation(hfile, indent, time_slot, obj):
@@ -559,11 +559,11 @@ def GetArmatureAnimation(hfile, indent, time_slot, obj):
         print(bone.name)
         format_string = '-{} {} {}\n--{}{}{}\n'
         args = ["Animation", time_slot[0][1], '{', '{', bone.name, '}']
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, format_string, args)
         indent += 1
         format_string = "-{}\n--{}; {}\n"
         args = ["AnimationKey {", str(0), "// Rotation"]
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, format_string, args)
         format_string = ""
         args.clear()
         count = 0
@@ -585,15 +585,15 @@ def GetArmatureAnimation(hfile, indent, time_slot, obj):
                 format_string += "--{}; {}; {}, {}, {};;{}\n"
                 args += [str(frame), str(len(r)), str(r.x), str(r.y), str(r.z), sep.popleft()]
             count += 1
-        _Indentformat(hfile, indent, "--{};\n", [str(count)])
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, "--{};\n", [str(count)])
+        IndentFormat(hfile, indent, format_string, args)
         format_string = '-{} {}\n'
         args.clear()
         args = ['}', "// End of AnimationKey"]
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, format_string, args)
         format_string = '-{}\n--{}; {}\n'
         args = ["AnimationKey {", str(2), "// Location"]
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, format_string, args)
         count = 0
         format_string = ""
         args.clear()
@@ -604,37 +604,37 @@ def GetArmatureAnimation(hfile, indent, time_slot, obj):
             format_string += "--{}; {}; {}, {}, {};;{}\n"
             args += [str(frame), str(len(l)), str(l.x), str(l.y), str(l.z), sep1.popleft()]
             count += 1
-        _Indentformat(hfile, indent, "--{};\n", [str(count)])
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, "--{};\n", [str(count)])
+        IndentFormat(hfile, indent, format_string, args)
         format_string = "-{}\n"
         args = ["} // End of AnimationKey"]
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, format_string, args)
         indent -= 1
         format_string = "-{} {} {}\n"
         args = ['}', "// End of Animation", time_slot[0][1]]
-        _Indentformat(hfile, indent, format_string, args)
+        IndentFormat(hfile, indent, format_string, args)
     del format_string, args
     bpy.context.scene.frame_set(bpy.context.scene.frame_start)
     
-def _Markers(hfile, indent, markers, animate_data):
+def Markers(hfile, indent, markers, animate_data):
     if len(animate_data["MESH"]) > 0:
         for mesh_name in animate_data["MESH"]:
             format_string = "{} {} {}\n"
             args = ["AnimationSet", mesh_name, '{']
-            _Indentformat(hfile, indent, format_string, args)
+            IndentFormat(hfile, indent, format_string, args)
             for index, marker in enumerate(markers):
                 if index != (len(markers) - 1):
-                    _GetMeshAnimation(hfile, indent, (marker, markers[index + 1]), bpy.context.scene.objects[mesh_name])
+                    GetMeshAnimation(hfile, indent, (marker, markers[index + 1]), bpy.context.scene.objects[mesh_name])
             del format_string
             format_string = "{} {} {}\n\n"
             args.clear()
             args = ['}', "// End of AnimationSet", mesh_name]
-            _Indentformat(hfile, indent, format_string, args)
+            IndentFormat(hfile, indent, format_string, args)
     if len(animate_data["ARMATURE"]) > 0:
         for armature_name in animate_data["ARMATURE"]:
             format_string = "{} {} {}\n"
             args = ["AnimationSet", armature_name, '{']
-            _Indentformat(hfile, indent, format_string, args)
+            IndentFormat(hfile, indent, format_string, args)
             for index, marker in enumerate(markers):
                 if index != (len(markers) - 1):
                     GetArmatureAnimation(hfile, indent, (marker, markers[index + 1]), bpy.context.scene.objects[armature_name])
@@ -642,12 +642,12 @@ def _Markers(hfile, indent, markers, animate_data):
             format_string = "{} {} {}\n\n"
             args.clear()
             args = ['}', "// End of AnimationSet", armature_name]
-            _Indentformat(hfile, indent, format_string, args)
+            IndentFormat(hfile, indent, format_string, args)
     del args, format_string
 
-def _ExtractAnimation(hfile, indent, armatures, mesh, lhc):
+def ExtractAnimation(hfile, indent, armatures, mesh, lhc):
     markers = list()
-    _ExtractMarkers(markers)
+    ExtractMarkers(markers)
     animate_data = dict()
     animate_data["ARMATURE"] = dict()
     animate_data["MESH"] = dict()
@@ -665,12 +665,12 @@ def _ExtractAnimation(hfile, indent, armatures, mesh, lhc):
     sep = deque()
     format_string = "{} {}\n{};\n{} {}\n\n"
     args = ["AnimTicksPerSecond", "{", str(bpy.context.scene.render.fps), '}', "// End of AnimTicksPerSecond"]
-    _Indentformat(hfile, indent, format_string, args)
+    IndentFormat(hfile, indent, format_string, args)
     format_string = ''
     args.clear()
-    _Markers(hfile, indent, markers, animate_data)
+    Markers(hfile, indent, markers, animate_data)
     
-def _OutputToFile(filename, mesh, armatures, lhc):
+def OutputToFile(filename, mesh, armatures, lhc):
     p = path.expanduser("~") + "\\documents\\"
     if filename == None:
         filename = "Armature_Animation1.txt"
@@ -692,13 +692,13 @@ def _OutputToFile(filename, mesh, armatures, lhc):
         hfile.write(s)
         del s, p, filename
         for name in list(mesh):
-            if _ExtractMeshInfoToFile(hfile, bpy.context.scene.objects[name], mesh[name], lhc) == False:
+            if ExtractMeshInfoToFile(hfile, bpy.context.scene.objects[name], mesh[name], lhc) == False:
                 print("Could not extract", name)
             else:
                 print(name, "extracted")
         if len(armatures) > 0:
-            _ExtractArmaturesInfoToFile(hfile, armatures, lhc)
-        _ExtractAnimation(hfile, indent + 1, armatures, mesh, lhc)
+            ExtractArmaturesInfoToFile(hfile, armatures, lhc)
+        ExtractAnimation(hfile, indent + 1, armatures, mesh, lhc)
 
 def GatherSceneDataThenOutputToFile(filename = None, lhc = False):
     mesh = dict()
@@ -743,14 +743,22 @@ def GatherSceneDataThenOutputToFile(filename = None, lhc = False):
     if len(armatures) == 0 and len(mesh) == 0:
         print("No mesh or armature selected")
         return False
-    _OutputToFile(filename, mesh, armatures, lhc)
+    OutputToFile(filename, mesh, armatures, lhc)
     return True
 
 if __name__ == "__main__":
     print("----------------------------------------------------------------")
-    major, minor, sub = bpy.app.version
-    if major != 2 or minor < 70:
-        print("This script may not be compatible with this Blender version.")
-    file_name = "Blender_Export.txt"
-    if GatherSceneDataThenOutputToFile(file_name):
-        print("Saved to", path.expanduser("~") + "\\Documents\\" + file_name)
+    try:
+        major, minor, sub = bpy.app.version
+        if major != 2 or minor < 70:
+            print("This script may not be compatible with this Blender version.")
+        file_name = "Blender_Export.txt"
+        if GatherSceneDataThenOutputToFile(file_name):
+            print("Saved to", path.expanduser("~") + "\\Documents\\" + file_name)
+    except cUserException as user:
+        print(str(user))
+    except OSError as os:
+        print(os)
+    except:
+        print("Unknown exception raised.")
+        

@@ -615,7 +615,7 @@ def OutputToFile(filename, mesh, armatures, lhc):
             ExtractArmaturesInfoToFile(hfile, armatures, lhc)
         ExtractAnimation(hfile, indent + 1, armatures, mesh, lhc)
 
-def GatherSceneDataThenOutputToFile(lhc = False):
+def GatherSceneDataThenOutputToFile(file_name, lhc = False):
     mesh = dict()
     armatures = deque()
     for o in bpy.context.scene.objects:
@@ -658,7 +658,7 @@ def GatherSceneDataThenOutputToFile(lhc = False):
     if len(armatures) == 0 and len(mesh) == 0:
         print("No mesh or armature selected")
         return False
-    OutputToFile(filename, mesh, armatures, lhc)
+    OutputToFile(file_name, mesh, armatures, lhc)
     return True
     
 if __name__ == "__main__":

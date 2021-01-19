@@ -619,26 +619,19 @@ def ExtractAnimation(hfile, indent, armatures, mesh, lhc):
     Markers(hfile, indent, markers, animate_data)
     
 def OutputToFile(filename, mesh, armatures, lhc):
-    p = path.expanduser("~") + "\\documents\\"
-    if filename == None:
-        filename = "Armature_Animation1.txt"
     indent = 0
-    with open(p + filename, "w") as hfile:
-        s = "xof 0303txt 0032\n"
-        if lhc:
-            s += "// Left hand coordinate system\n"
-        else:
-            s += "// Right hand coordinate system\n"
+    print(filename)
+    with open(filename, "w") as hfile:
+        s = "xof 0303txt 0032\n// Right hand coordinate system\n"
         if (len(mesh)) > 0:
             s += "// Face of polygons are counter clockwise\n"
-            s += "{} {}\n".format("// Number of meshes", len(mesh))
+            s += "// Number of meshes" + str(len(mesh)) + "\n"
         if (len(armatures)) > 0:
-            s += "{} {}\n".format("// Number of armatures ", len(armatures))
+            s += "// Number of armatures " + str(len(armatures)) + "\n"
         for key in mesh.keys():
             s += "// Mesh " + key + '\n'
         s += '\n'
         hfile.write(s)
-        del s, p, filename
         for name in list(mesh):
             if ExtractMeshInfoToFile(hfile, bpy.context.scene.objects[name], mesh[name], lhc) == False:
                 print("Could not extract", name)
@@ -693,14 +686,14 @@ def GatherSceneDataThenOutputToFile(filename = None, lhc = False):
         return False
     OutputToFile(filename, mesh, armatures, lhc)
     return True
-
+    
 if __name__ == "__main__":
     print("----------------------------------------------------------------")
     try:
         major, minor, sub = bpy.app.version
         if major != 2 or minor < 70:
             print("This script may not be compatible with this Blender version.")
-        file_name = "Blender_Export.txt"
+        file_name = path.expanduser("~") + "\\Documents\\Blender_Export.txt"
         if GatherSceneDataThenOutputToFile(file_name):
             print("Saved to", path.expanduser("~") + "\\Documents\\" + file_name)
     except cUserException as user:

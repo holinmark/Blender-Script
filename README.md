@@ -1,6 +1,4 @@
 # Blender-script
-X file exporter for blender.
-
 It's a Blender 2.79b exporter to an x file format. Any other version of blender may not work.
 It exports to a file named
 "Blender_Export.txt"

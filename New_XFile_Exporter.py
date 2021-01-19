@@ -9,30 +9,7 @@ class cUserException(Exception):
         
     def __str__(self):
         return self.error + "\n" + str(self.line) + "\n"
-    
-class cBlenderObjects:
-    def __init__(self, blender_object):
-        self.object_name = blender_object.name
-        self.object_type = blender_object.type
-        self.parent = None
-        if blender_object.parent != None:
-            self.parent = cBlenderObjects(blender_object.parent)
-            
-    def __str__(self):
-        s = ""
-        if self.object_type == "MESH":
-            s += "Mesh " + self.object_name + "\n"
-        elif self.object_type == "ARMATURE":
-            s += "Armature " + self.object_name + "\n"
-        if self.parent != None:
-            s += "Parent "
-            if self.parent.object_type == "MESH":
-                s += "MESH "
-            elif self.parent.object_type == "ARMATURE":
-                s += "ARMATURE "
-            s += self.parent.object_name + "\n"
-        return s
-
+        
 def RemoveWhiteSpace(s):
     if type(s).__name__ == 'str':
         tmp = ''
@@ -497,7 +474,6 @@ def GetMeshAnimation(hfile, indent, time_slot, obj):
     sep2 = copy.copy(sep1)
     ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (2, _Translate), sep2, obj.name)
     sep2 = copy.copy(sep1)
-    print("Exporting rotation")
     ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (0, _Rotate), sep2, obj.name)
     del format_string
     format_string = '-{}\n'
@@ -510,7 +486,6 @@ def GetArmatureAnimation(hfile, indent, time_slot, obj):
     sep = deque()
     sep1 = deque()
     for bone in obj.pose.bones:
-        print(bone.name)
         format_string = '-{} {} {}\n--{}{}{}\n'
         args = ["Animation", time_slot[0][1], '{', '{', bone.name, '}']
         IndentFormat(hfile, indent, format_string, args)
@@ -620,7 +595,6 @@ def ExtractAnimation(hfile, indent, armatures, mesh, lhc):
     
 def OutputToFile(filename, mesh, armatures, lhc):
     indent = 0
-    print(filename)
     with open(filename, "w") as hfile:
         s = "xof 0303txt 0032\n// Right hand coordinate system\n"
         if (len(mesh)) > 0:
@@ -641,7 +615,7 @@ def OutputToFile(filename, mesh, armatures, lhc):
             ExtractArmaturesInfoToFile(hfile, armatures, lhc)
         ExtractAnimation(hfile, indent + 1, armatures, mesh, lhc)
 
-def GatherSceneDataThenOutputToFile(filename = None, lhc = False):
+def GatherSceneDataThenOutputToFile(lhc = False):
     mesh = dict()
     armatures = deque()
     for o in bpy.context.scene.objects:
@@ -702,5 +676,7 @@ if __name__ == "__main__":
         print(os)
     except AttributeError as a:
         print(a)
+    except KeyError as key:
+        print(key)
     except:
         print("Unknown exception raised.")

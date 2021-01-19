@@ -694,22 +694,6 @@ def GatherSceneDataThenOutputToFile(filename = None, lhc = False):
     OutputToFile(filename, mesh, armatures, lhc)
     return True
 
-def F():
-    list_of_objects_to_extract = []
-    for o in bpy.context.scene.objects:
-        if not o.select:
-            continue
-        if o.type == "MESH":
-            blender_object = cBlenderObjects(o)
-            list_of_objects_to_extract.append(blender_object)
-        elif o.type == "ARMATURE":
-            blender_object = cBlenderObjects(o)
-            list_of_objects_to_extract.append(blender_object)
-        else:
-            print("Unknown object", o.name)
-    for l in list_of_objects_to_extract:
-        print(str(l))
-        
 if __name__ == "__main__":
     print("----------------------------------------------------------------")
     try:
@@ -727,5 +711,3 @@ if __name__ == "__main__":
         print(a)
     except:
         print("Unknown exception raised.")
-    F()
-    

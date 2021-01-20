@@ -111,7 +111,6 @@ def ExtractMatrices(hfile, indent, matrix, lhc):
 
 def ExtractTextureCoordinateToFile(hfile, indent, obj):
     if len(obj.data.uv_layers) == 0:
-        print(obj.name, "has no uv layers.")
         return
     format_string = "-{}\n--{}\n"
     uv_layer = obj.data.uv_layers.active
@@ -334,6 +333,8 @@ def ExtractMeshInfoToFile(hfile, obj, matrix, lhc = False):
         return False
     indent = 0
     format_string = "-{} {} {}\n+-{}{}\n"
+    name = RemoveWhiteSpace(obj.name)
+    print("Extracting mesh", obj.name)
     args = ["Mesh", RemoveWhiteSpace(obj.name), "{", str(len(obj.data.vertices)), ";"]
     IndentFormat(hfile, indent, format_string, args)
     indent += 1
@@ -357,7 +358,7 @@ def ExtractMeshInfoToFile(hfile, obj, matrix, lhc = False):
         if obj.parent.select:
             ExtractWeights(hfile, indent, obj)
     ExtractMatrices(hfile, indent, matrix, lhc)
-    format_string = "} // End of mesh " + RemoveWhiteSpace(obj.name) + "\n\n"
+    format_string = "} // End of mesh " + name + "\n\n"
     hfile.write(format_string)
     del format_string
     return True
@@ -372,7 +373,9 @@ def ExtractArmaturesInfoToFile(hfile, armatures, lhc = False):
     bone_stack = list()
     indent = 0
     for currarmature in reversed(armatures):
-        Indent(hfile, indent, "\nFrame " + RemoveWhiteSpace(currarmature) + " {\n")
+        name = RemoveWhiteSpace(currarmature)
+        print("Extracting armature", currarmature)
+        Indent(hfile, indent, "\nFrame " + name + " {\n")
         a = bpy.context.scene.objects[currarmature]
         if a.children != None:
             for child in a.children:
@@ -406,6 +409,7 @@ def ExtractArmaturesInfoToFile(hfile, armatures, lhc = False):
             Indent(hfile, indent, '} // End of ' + currbone + '\n')
         indent -= 1
         Indent(hfile, indent, '} // End of ' + currarmature + '\n')
+        print(currarmature, "extracted.")
     hfile.write("\n")
 
 def _Rotate(obj):

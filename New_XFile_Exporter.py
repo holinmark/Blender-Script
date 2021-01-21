@@ -1,6 +1,5 @@
-import bpy, mathutils, math, copy
+import bpy, mathutils, math, copy, os
 from collections import deque
-from os import path
 
 class cUserException(Exception):
     def __init__(self, error_string, line_number):
@@ -665,10 +664,28 @@ def GatherSceneDataThenOutputToFile279(file_name, lhc = False):
     OutputToFile(file_name, mesh, armatures, lhc)
     return True
     
+def GatherSceneDataThenOutputToFile280(file_name, lhc = False):
+    for o in bpy.context.scene.objects:
+        if not o.select_get():
+            continue
+        if o.type == "MESH":
+            pass
+        elif o.type == "ARMATURE":
+            pass
+        elif o.type == "EMPTY":
+            pass
+        else:
+            print("Unknown object", o.name)
+            
 if __name__ == "__main__":
     print("----------------------------------------------------------------")
     try:
-        file_name = path.expanduser("~") + "\\Documents\\Blender_Export.txt"
+        file_name = ""
+        if os.name == "nt":
+            file_name = os.path.expanduser("~") + "\\Documents\\Blender_Export.txt"
+        else:
+            print("Unknown operating system.  Do not have a path to save file.  Exiting.")
+            os.exit(0)
         major, minor, sub = bpy.app.version
         if major == 2 and minor == 79 and sub >= 0:
             if GatherSceneDataThenOutputToFile279(file_name):
@@ -676,7 +693,7 @@ if __name__ == "__main__":
         elif major == 2 and minor >= 80 and sub >= 0:
             pass
         else:
-            print("This script is not intended for this version of Blender.  Exiting.")
+            print("This script is not intended for Blender", bpy.app.version, "Exiting.")
     except cUserException as user:
         print(str(user))
     except OSError as os:

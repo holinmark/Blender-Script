@@ -619,7 +619,7 @@ def OutputToFile(filename, mesh, armatures, lhc):
             ExtractArmaturesInfoToFile(hfile, armatures, lhc)
         ExtractAnimation(hfile, indent + 1, armatures, mesh, lhc)
 
-def GatherSceneDataThenOutputToFile(file_name, lhc = False):
+def GatherSceneDataThenOutputToFile279(file_name, lhc = False):
     mesh = dict()
     armatures = deque()
     for o in bpy.context.scene.objects:
@@ -668,12 +668,15 @@ def GatherSceneDataThenOutputToFile(file_name, lhc = False):
 if __name__ == "__main__":
     print("----------------------------------------------------------------")
     try:
-        major, minor, sub = bpy.app.version
-        if major != 2 or minor < 70:
-            print("This script may not be compatible with this Blender version.")
         file_name = path.expanduser("~") + "\\Documents\\Blender_Export.txt"
-        if GatherSceneDataThenOutputToFile(file_name):
-            print("Saved to", path.expanduser("~") + "\\Documents\\" + file_name)
+        major, minor, sub = bpy.app.version
+        if major == 2 and minor == 79 and sub >= 0:
+            if GatherSceneDataThenOutputToFile279(file_name):
+                print("Saved to", file_name)
+        elif major == 2 and minor >= 80 and sub >= 0:
+            pass
+        else:
+            print("This script is not intended for this version of Blender.  Exiting.")
     except cUserException as user:
         print(str(user))
     except OSError as os:
@@ -682,5 +685,7 @@ if __name__ == "__main__":
         print(a)
     except KeyError as key:
         print(key)
+    except ValueError as value:
+        print(value)
     except:
         print("Unknown exception raised.")

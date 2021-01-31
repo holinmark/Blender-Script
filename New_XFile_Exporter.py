@@ -180,33 +180,24 @@ def ExtractMaterials(hfile, indent, obj):
     s = "} // End of MeshMaterialList\n"
     Indent(hfile, indent, s)
     
-def GetMatrixOffset(hfile, indent, mesh, bone_name):
-    mesh_l, mesh_r, mesh_s = mesh.matrix_world.decompose()
-    parent = bpy.context.scene.objects[mesh.parent.name]
-    if bone_name not in parent.data.bones:
-        return False
-    bone_l, bone_r, bone_s = parent.data.bones[bone_name].matrix_local.decompose()
-    parent_l, parent_r, parent_s = parent.matrix_world.decompose()
-    l, r, s = (parent.matrix_world * parent.data.bones[bone_name].matrix_local).decompose()
-    m = mathutils.Matrix.Translation(mesh_l - l)
-    sep = deque()
-    for i in range(15):
-        sep.append(', ')
-    sep.append(';')
-    format_string = "--"
-    args = []
-    while len(sep) > 0:
-        format_string += "{}" + sep.popleft()
-    format_string += ";\n"
+def GetMatrixOffset(hfile, indent, arm, bone_name):
+    l, r, s = arm.data.bones[bone_name].matrix_local.decompose()
+    r.invert()
+    m = r.to_matrix().to_4x4()
+    s = "-{}"
+    args = ["Matrix4x4 { "]
+    IndentFormat(hfile, indent, s, args)
+    sep1 = deque()
+    for i in range(1, 4):
+        sep1.append(", ")
+    sep1.append("; ")
     for row in m:
-        for col in row:
-            args.append(str(col))
-    IndentFormat(hfile, indent, format_string, args)
-    del format_string, args, mesh_l, mesh_r, mesh_s
-    del parent, bone_l, bone_r, bone_s
-    del parent_l, parent_r, parent_s
-    del l, r, s, m, sep
-    return True
+        s = "{}{} {}{} {}{} {}{}"
+        args = [str(row.x), ", ", str(row.y), ", ", str(row.z), ", ", str(row.w), sep1.popleft()]
+        IndentFormat(hfile, indent, s, args)
+    s = "{}\n"
+    args = ["}"]
+    IndentFormat(hfile, indent, s, args)
     
 def ExtractWeights(hfile, indent, obj):
     s = "\n// mesh weights go here\n\n"
@@ -253,7 +244,10 @@ def ExtractWeights(hfile, indent, obj):
             format_string += "--{}{}\n"
             args += [str(w), sep.popleft()]
         IndentFormat(hfile, indent, format_string, args)
-        GetMatrixOffset(hfile, indent, obj, obj.vertex_groups[group].name)
+        if obj.parent != None:
+            GetMatrixOffset(hfile, indent, bpy.context.scene.objects[obj.parent.name], obj.vertex_groups[group].name)
+        else:
+            print(obj.name, "no parent.")
         format_string = "-{} {}\n"
         args = ["}", "// End of SkinWeights"]
         IndentFormat(hfile, indent, format_string, args)
@@ -411,7 +405,7 @@ def ExtractArmaturesInfoToFile(hfile, armatures, lhc = False):
         print(currarmature, "extracted.")
     hfile.write("\n")
 
-def _Rotate(obj):
+def GetRotate(obj):
     if obj.rotation_mode == 'QUATERNION':
         e = obj.rotation_quaternion
         return ("{}; {}, {}, {}, {};", [str(len(e)), str(e.w), str(e.x), str(e.y), str(e.z)])
@@ -419,10 +413,16 @@ def _Rotate(obj):
         e = obj.rotation_euler.copy()
         return ("{}; {}, {}, {};", [str(len(e)), str(e.x), str(e.y), str(e.z)])
 
-def _Scale(obj):
+def GetQuaternionRotation(obj, hfile, indent):
+    r = obj.rotation_quaternion
+    
+def GetEulerRotation(obj, hfile, indent):
+    r = obj.rotation_euler
+    
+def GetScale(obj):
     return ("{}; {}, {}, {};", [str(len(obj.scale)), str(obj.scale[0]), str(obj.scale[1]), str(obj.scale[2])])
 
-def _Translate(obj):
+def GetTranslate(obj):
     return ("{}; {}, {}, {};", [str(len(obj.location)), str(obj.location[0]), str(obj.location[1]), str(obj.location[2])])
 
 def ExtractAnimationDataPerFrames(hfile, indent, time, type, sep, name):
@@ -473,11 +473,11 @@ def GetMeshAnimation(hfile, indent, time_slot, obj):
     args.extend(["Animation", time_slot[0][1], '{', '{', obj.name, '}'])
     IndentFormat(hfile, indent, format_string, args)
     sep2 = copy.copy(sep1)
-    ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (1, _Scale), sep2, obj.name)
+    ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (1, GetScale), sep2, obj.name)
     sep2 = copy.copy(sep1)
-    ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (2, _Translate), sep2, obj.name)
+    ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (2, GetTranslate), sep2, obj.name)
     sep2 = copy.copy(sep1)
-    ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (0, _Rotate), sep2, obj.name)
+    ExtractAnimationDataPerFrames(hfile, indent + 1, (time_slot[0][0], time_slot[1][0]), (0, GetRotate), sep2, obj.name)
     del format_string
     format_string = '-{}\n'
     args.clear()
@@ -506,13 +506,19 @@ def GetArmatureAnimation(hfile, indent, time_slot, obj):
         sep.append(';')
         sep1.append(';')
         for frame in range(time_slot[0][0], time_slot[1][0] + 1):
-            bpy.context.scene.frame_set(frame)
-            l, r, s = bone.matrix.decompose()
-            format_string += "--{}; {}; {}, {}, {}, {};;{}\n"
-            args += [str(frame), str(len(r)), str(r.w), str(r.x), str(r.y), str(r.z), sep.popleft()]
             count += 1
         IndentFormat(hfile, indent, "--{};\n", [str(count)])
-        IndentFormat(hfile, indent, format_string, args)
+        for frame in range(time_slot[0][0], time_slot[1][0] + 1):
+            bpy.context.scene.frame_set(frame)
+            if bone.rotation_mode == "QUATERNION":
+                r = bone.rotation_quaternion
+                format_string = "--{}; {}; {}, {}, {}, {};;{}\n"
+                args = [str(frame), str(len(r)), str(r.w), str(r.x), str(r.y), str(r.z), sep.popleft()]
+            elif bone.rotation_mode == "XYZ":
+                r = bon.rotation_euler
+                format_string = "--{}; {}; {}, {}, {};;{}\n"
+                args = [str(frame), str(len(r)), str(r.x), str(r.y), str(r.z), sep.popleft()]
+            IndentFormat(hfile, indent, format_string, args)
         format_string = '-{} {}\n'
         args.clear()
         args = ['}', "// End of AnimationKey"]
@@ -526,7 +532,7 @@ def GetArmatureAnimation(hfile, indent, time_slot, obj):
         for frame in range(time_slot[0][0], time_slot[1][0] + 1):
             bpy.context.scene.frame_set(frame)
             #l = bone.location
-            l, r, s = bone.matrix.decompose()
+            l = bone.location
             format_string += "--{}; {}; {}, {}, {};;{}\n"
             args += [str(frame), str(len(l)), str(l.x), str(l.y), str(l.z), sep1.popleft()]
             count += 1
@@ -665,33 +671,80 @@ def GatherSceneDataThenOutputToFile279(file_name, lhc = False):
     return True
     
 def GatherSceneDataThenOutputToFile280(file_name, lhc = False):
+    meshes = dict()
+    armatures = deque()
     for o in bpy.context.scene.objects:
         if not o.select_get():
             continue
         if o.type == "MESH":
-            pass
+            if o.mode != "OBJECT":
+                if bpy.ops.object.mode_set.poll():
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                else:
+                    continue
+            if o.parent != None:
+                mat = o.matrix_basis.copy()
+            else:
+                mat = o.matrix_world.copy()
+            if o.name not in meshes:
+                meshes[o.name] = [mat]
+            else:
+                meshes[o.name].append(mat)
+        # for armature use deque.  Inserting parent name of armature first then children name of armature after parent.
         elif o.type == "ARMATURE":
-            pass
+            if o.mode == 'EDIT':
+                if bpy.ops.object.mode_set.poll():
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                else:
+                    continue
+            if o.parent != None and o.parent.type == "ARMATURE":
+                if o.parent.name not in armatures and o.parent.select:
+                    armatures.append(o.parent.name)
+            armatures.append(o.name)
+        # Insert into mesh deque instance
         elif o.type == "EMPTY":
             pass
-        else:
-            print("Unknown object", o.name)
-            
+    if len(armatures) == 0 and len(meshes) == 0:
+        print("No mesh or armature selected")
+        return False
+    OutputToFile(file_name, meshes, armatures, lhc)
+    return True
+
+def ExtractObjectsToFile(file_name, objects_to_export):
+    if type(objects_to_export) == "dict":
+        for name, time_lines in objects_to_export.items():
+            if name in bpy.context.scene.objects.keys():
+                pass
+            else:
+                print("{} {}".format("Unknown object", name))
+                del objects_to_export[name]
+        for name, time_lines in objects_to_export.items():
+            pass
+    else:
+        raise(sUserException("Error expecting a dictionaray.", "ExtractObjectsToFile function."))
+        
 if __name__ == "__main__":
     print("----------------------------------------------------------------")
     try:
+        objects_to_export = dict()
         file_name = ""
         if os.name == "nt":
             file_name = os.path.expanduser("~") + "\\Documents\\Blender_Export.txt"
         else:
-            print("Unknown operating system.  Do not have a path to save file.  Exiting.")
-            os.exit(0)
+            raise(sUserException("Unknown operating system.  Do not have a path to save file.  Exiting.", "main"))
         major, minor, sub = bpy.app.version
         if major == 2 and minor == 79 and sub >= 0:
-            if GatherSceneDataThenOutputToFile279(file_name):
-                print("Saved to", file_name)
+            if len(objects_to_export) == 0:
+                if GatherSceneDataThenOutputToFile279(file_name):
+                    print("Saved to", file_name)
+                else:
+                    ExtractObjectsToFile(file_name, objects_to_export)
         elif major == 2 and minor >= 80 and sub >= 0:
-            pass
+            if len(objects_to_export) == 0:
+                if GatherSceneDataThenOutputToFile280(file_name):
+                    print("Saved to", file_name)
+                else:
+                    ExtractObjectsToFile(file_name, objects_to_export)
         else:
             print("This script is not intended for Blender", bpy.app.version, "Exiting.")
     except cUserException as user:

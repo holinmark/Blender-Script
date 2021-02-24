@@ -181,9 +181,21 @@ def ExtractMaterials(hfile, indent, obj):
     Indent(hfile, indent, s)
     
 def GetMatrixOffset(hfile, indent, arm, bone_name):
+    # Alter code to get matrix offset that is in between comments
     l, r, s = arm.data.bones[bone_name].matrix_local.decompose()
     r.invert()
-    m = r.to_matrix().to_4x4()
+    m = mathutils.Matrix.Identity(4)
+    mesh_loc = None
+    mesh_rot = None
+    mesh_scale = None
+    if len(arm.children) > 0:
+        mesh_loc, mesh_rot, mesh_scale = arm.children[0].matrix_world.decompose()
+        diff_loc = l - mesh_loc
+        diff_rot = r * mesh_rot
+        matrixoffset = mathutils.Matrix.Translation(diff_loc.to_tuple()) * diff_rot.to_matrix().to_4x4()
+    else:
+        matrixoffset = r.to_matrix().to_4x4()
+    # Alter code between comments
     s = "-{}"
     args = ["Matrix4x4 { "]
     IndentFormat(hfile, indent, s, args)
@@ -191,7 +203,7 @@ def GetMatrixOffset(hfile, indent, arm, bone_name):
     for i in range(1, 4):
         sep1.append(", ")
     sep1.append("; ")
-    for row in m:
+    for row in matrixoffset:
         s = "{}{} {}{} {}{} {}{}"
         args = [str(row.x), ", ", str(row.y), ", ", str(row.z), ", ", str(row.w), sep1.popleft()]
         IndentFormat(hfile, indent, s, args)

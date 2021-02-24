@@ -8,6 +8,11 @@ and print them to the x file.
 It exports armatures, meshes and animation with/without time markers. Just make sure
 the objects have been selected.
 
+The GetMatrixOffset function is not a function that can cover all different scenarios
+between armature and mesh parenting. You must change that function and calculate a new
+matrix offset per bone to suit your own needs. Check the microsoft documents especially
+the SkinWeights template for more information on the matrix offset attribute.
+
 By the way I'm not a Blender expert, nor am I an animation expert. So use at your
 own discretion.
 

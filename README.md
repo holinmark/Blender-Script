@@ -1,5 +1,5 @@
 # Blender-script
-It's a Blender 2.79b exporter to an x file format. Any other version of blender may not work.
+It's a Blender 2.79b exporter to an x file format. Any other version of Blender may not work.
 It exports to a file named
 "Blender_Export.txt"
 to your documents folder.
@@ -13,7 +13,7 @@ between armature and mesh parenting. You must change that function and calculate
 matrix offset per bone to suit your own needs. Check the microsoft documents especially
 the SkinWeights template for more information on the matrix offset attribute.
 
-By the way I'm not a Blender expert, nor am I an animation expert. So use at your
+I'm not a Blender expert, nor am I an animation expert. So use at your
 own discretion.
 
 Must does:

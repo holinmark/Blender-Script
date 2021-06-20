@@ -192,7 +192,8 @@ def GetMatrixOffset(hfile, indent, arm, bone_name):
     child_scale = None
     if len(arm.children) > 0:
         child_loc, child_rot, child_scale = arm.children[0].matrix_world.decompose()
-        diff_loc = (l + child_loc.negate()) + bone.head_local
+        child_loc.negate()
+        diff_loc = l + child_loc + bone.head_local
         matrixoffset = mathutils.Matrix.Translation(diff_loc)
     else:
         matrixoffset = mathutils.Matrix.Identity(4)

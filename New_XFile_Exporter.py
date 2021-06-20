@@ -80,7 +80,7 @@ def ExtractMatrixToFile(hfile, indent, matrix, lhc = False, title = None):
     seperator.append(";")
     for row in matrix.transposed():
         format_string = "{}{} {}{} {}{} {}{}"
-        args = [str(row.x), ", ", str(row.y), ", ", str(row.z), ", ", str(row.w), seperator.popleft()]
+        args = [str(row.x), ",", str(row.y), ",", str(row.z), ",", str(row.w), seperator.popleft()]
         IndentFormat(hfile, indent, format_string, args)
     s = ""
     if title == "Matrix4x4 {":
@@ -181,21 +181,21 @@ def ExtractMaterials(hfile, indent, obj):
     Indent(hfile, indent, s)
     
 def GetMatrixOffset(hfile, indent, arm, bone_name):
-    # Alter code to get matrix offset that is in between comments
+    # Matrix offset needs more work.  I'm pretty sure it's incorrect.
+    if bone_name not in arm.data.bones:
+        return
+    bone = arm.data.bones[bone_name]
     l, r, s = arm.data.bones[bone_name].matrix_local.decompose()
     r.invert()
-    m = mathutils.Matrix.Identity(4)
-    mesh_loc = None
-    mesh_rot = None
-    mesh_scale = None
+    child_loc = None
+    child_rot = None
+    child_scale = None
     if len(arm.children) > 0:
-        mesh_loc, mesh_rot, mesh_scale = arm.children[0].matrix_world.decompose()
-        diff_loc = l - mesh_loc
-        diff_rot = r * mesh_rot
-        matrixoffset = mathutils.Matrix.Translation(diff_loc.to_tuple()) * diff_rot.to_matrix().to_4x4()
+        child_loc, child_rot, child_scale = arm.children[0].matrix_world.decompose()
+        diff_loc = (l + child_loc.negate()) + bone.head_local
+        matrixoffset = mathutils.Matrix.Translation(diff_loc)
     else:
-        matrixoffset = r.to_matrix().to_4x4()
-    # Alter code between comments
+        matrixoffset = mathutils.Matrix.Identity(4)
     s = "-{}"
     args = ["Matrix4x4 { "]
     IndentFormat(hfile, indent, s, args)
@@ -427,10 +427,10 @@ def GetRotate(obj):
 
 def GetQuaternionRotation(obj, hfile, indent):
     r = obj.rotation_quaternion
-    
+
 def GetEulerRotation(obj, hfile, indent):
     r = obj.rotation_euler
-    
+
 def GetScale(obj):
     return ("{}; {}, {}, {};", [str(len(obj.scale)), str(obj.scale[0]), str(obj.scale[1]), str(obj.scale[2])])
 
@@ -438,8 +438,8 @@ def GetTranslate(obj):
     return ("{}; {}, {}, {};", [str(len(obj.location)), str(obj.location[0]), str(obj.location[1]), str(obj.location[2])])
 
 def ExtractAnimationDataPerFrames(hfile, indent, time, type, sep, name):
-    format_string = "-{} {}\n+-{};\n-{};\n"
-    args = ["AnimationKey", "{", str(type[0]), str(time[1] - time[0])]
+    format_string = "-{} {}\n+-{}{}\n-{}{}\n"
+    args = ["AnimationKey", "{", str(type[0]), ";", str(time[1] - time[0]), ";"]
     IndentFormat(hfile, indent, format_string, args)
     obj = bpy.context.scene.objects[name]
     indent += 1
@@ -620,7 +620,7 @@ def OutputToFile(filename, mesh, armatures, lhc):
         s = "xof 0303txt 0032\n// Right hand coordinate system\n"
         if (len(mesh)) > 0:
             s += "// Face of polygons are counter clockwise\n"
-            s += "// Number of meshes" + str(len(mesh)) + "\n"
+            s += "// Number of meshes " + str(len(mesh)) + "\n"
         if (len(armatures)) > 0:
             s += "// Number of armatures " + str(len(armatures)) + "\n"
         for key in mesh.keys():

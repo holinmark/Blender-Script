@@ -193,23 +193,10 @@ def GetMatrixOffset(hfile, indent, arm, bone_name):
         matrixoffset = matrixoffset * mathutils.Matrix.Translation(diff_loc) * child_rot.to_matrix().to_4x4()
         scale = mathutils.Matrix.Scale(child_scale.x, 4, (1.0, 0, 0)) * mathutils.Matrix.Scale(child_scale.y, 4, (0, 1.0, 0)) * mathutils.Matrix.Scale(child_scale.z, 4, (0, 0, 1.0))
         matrixoffset = matrixoffset * scale
-    s = "-{}"
-    args = ["Matrix4x4 { "]
-    IndentFormat(hfile, indent, s, args)
-    sep1 = deque()
-    for i in range(1, 4):
-        sep1.append(", ")
-    sep1.append("; ")
-    s = ""
-    args.clear()
-    for row in matrixoffset:
-        s += "{}{} {}{} {}{} {}{}"
-        args += [str(row.x), ", ", str(row.y), ", ", str(row.z), ", ", str(row.w), sep1.popleft()]
-        #IndentFormat(hfile, indent, s, args)
-    s += "{}\n"
-    args += ["}"]
-    IndentFormat(hfile, indent, s, args)
-    
+    indent += 1
+    ExtractMatrixToFile(hfile, indent, matrixoffset)
+    indent -= 1
+
 def ExtractWeights(hfile, indent, obj):
     s = "\n// mesh weights go here\n\n"
     hfile.write(s)

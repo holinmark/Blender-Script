@@ -182,23 +182,17 @@ def ExtractMaterials(hfile, indent, obj):
     
 def GetMatrixOffset(hfile, indent, arm, bone_name):
     # Matrix offset needs more work.  I'm pretty sure it's incorrect.
+    matrixoffset = mathutils.Matrix.Identity(4)
     if bone_name not in arm.data.bones:
-        return
+        raise cUserException("In GetMatrixOffset ", bone_name + " does not exist.", 187)
     bone = arm.data.bones[bone_name]
-    l, r, s = arm.data.bones[bone_name].matrix_local.decompose()
-    r.invert()
-    child_loc = None
-    child_rot = None
-    child_scale = None
+    arm_loc, arm_rotation, arm_scale = bone.matrix_local.decompose()
     if len(arm.children) > 0:
         child_loc, child_rot, child_scale = arm.children[0].matrix_world.decompose()
-        child_loc.negate()
-        diff_loc = l + child_loc + bone.head_local
-        matrixoffset = mathutils.Matrix.Translation(diff_loc) * child_rot.to_matrix().to_4x4()
-        m = mathutils.Matrix.Scale(child_scale.x, 4, (1, 0, 0)) * mathtuils.Matrix.Scale(child_scale.y, 4, (0, 1, 0)) * mathutils.Matrix.Scale(child_scale.z, 4, (0, 0, 1))
-        matrixoffset = matrixoffset * m
-    else:
-        matrixoffset = mathutils.Matrix.Identity(4)
+        diff_loc = (-1 * child_loc) + arm_loc + bone.head_local
+        matrixoffset = matrixoffset * mathutils.Matrix.Translation(diff_loc) * child_rot.to_matrix().to_4x4()
+        scale = mathutils.Matrix.Scale(child_scale.x, 4, (1.0, 0, 0)) * mathutils.Matrix.Scale(child_scale.y, 4, (0, 1.0, 0)) * mathutils.Matrix.Scale(child_scale.z, 4, (0, 0, 1.0))
+        matrixoffset = matrixoffset * scale
     s = "-{}"
     args = ["Matrix4x4 { "]
     IndentFormat(hfile, indent, s, args)
@@ -206,12 +200,14 @@ def GetMatrixOffset(hfile, indent, arm, bone_name):
     for i in range(1, 4):
         sep1.append(", ")
     sep1.append("; ")
+    s = ""
+    args.clear()
     for row in matrixoffset:
-        s = "{}{} {}{} {}{} {}{}"
-        args = [str(row.x), ", ", str(row.y), ", ", str(row.z), ", ", str(row.w), sep1.popleft()]
-        IndentFormat(hfile, indent, s, args)
-    s = "{}\n"
-    args = ["}"]
+        s += "{}{} {}{} {}{} {}{}"
+        args += [str(row.x), ", ", str(row.y), ", ", str(row.z), ", ", str(row.w), sep1.popleft()]
+        #IndentFormat(hfile, indent, s, args)
+    s += "{}\n"
+    args += ["}"]
     IndentFormat(hfile, indent, s, args)
     
 def ExtractWeights(hfile, indent, obj):
@@ -342,7 +338,7 @@ def ExtractMeshInfoToFile(hfile, obj, matrix, lhc = False):
     indent = 0
     format_string = "-{} {} {}\n+-{}{}\n"
     name = RemoveWhiteSpace(obj.name)
-    print("Extracting mesh", obj.name)
+    print("Extracting mesh", obj.name, "\n", obj.matrix_world.decompose())
     args = ["Mesh", RemoveWhiteSpace(obj.name), "{", str(len(obj.data.vertices)), ";"]
     IndentFormat(hfile, indent, format_string, args)
     indent += 1
@@ -385,6 +381,7 @@ def ExtractArmaturesInfoToFile(hfile, armatures, lhc = False):
         print("Extracting armature", currarmature)
         Indent(hfile, indent, "\nFrame " + name + " {\n")
         a = bpy.context.scene.objects[currarmature]
+        print(a.matrix_world.decompose())
         if a.children != None:
             for child in a.children:
                 Indent(hfile, indent, "{ " + child.name + " }\n")

@@ -8,7 +8,7 @@ class cUserException(Exception):
         
     def __str__(self):
         return self.error + "\n" + str(self.line) + "\n"
-        
+
 def RemoveWhiteSpace(s):
     if type(s).__name__ == 'str':
         tmp = ''
@@ -84,9 +84,9 @@ def ExtractMatrixToFile(hfile, indent, matrix, lhc = False, title = None):
         IndentFormat(hfile, indent, format_string, args)
     s = ""
     if title == "Matrix4x4 {":
-        s = ' }\n'
+        s = " }\n"
     else: #FrameTransformMatrix
-        s = '; }\n'
+        s = "; }\n"
     hfile.write(s)
     del args, format_string, seperator, s
 
@@ -184,7 +184,7 @@ def GetMatrixOffset(hfile, indent, arm, bone_name):
     # Matrix offset needs more work.  I'm pretty sure it's incorrect.
     matrixoffset = mathutils.Matrix.Identity(4)
     if bone_name not in arm.data.bones:
-        raise cUserException("In GetMatrixOffset ", bone_name + " does not exist.", 187)
+        raise(cUserException("In GetMatrixOffset ", bone_name + " does not exist.", 187))
     bone = arm.data.bones[bone_name]
     arm_loc, arm_rotation, arm_scale = bone.matrix_local.decompose()
     if len(arm.children) > 0:
@@ -325,7 +325,7 @@ def ExtractMeshInfoToFile(hfile, obj, matrix, lhc = False):
     indent = 0
     format_string = "-{} {} {}\n+-{}{}\n"
     name = RemoveWhiteSpace(obj.name)
-    print("Extracting mesh", obj.name, "\n", obj.matrix_world.decompose())
+    print("Extracting mesh", obj.name)
     args = ["Mesh", RemoveWhiteSpace(obj.name), "{", str(len(obj.data.vertices)), ";"]
     IndentFormat(hfile, indent, format_string, args)
     indent += 1
@@ -368,7 +368,6 @@ def ExtractArmaturesInfoToFile(hfile, armatures, lhc = False):
         print("Extracting armature", currarmature)
         Indent(hfile, indent, "\nFrame " + name + " {\n")
         a = bpy.context.scene.objects[currarmature]
-        print(a.matrix_world.decompose())
         if a.children != None:
             for child in a.children:
                 Indent(hfile, indent, "{ " + child.name + " }\n")
@@ -424,7 +423,7 @@ def GetScale(obj):
 def GetTranslate(obj):
     return ("{}; {}, {}, {};", [str(len(obj.location)), str(obj.location[0]), str(obj.location[1]), str(obj.location[2])])
 
-def ExtractAnimationDataPerFrames(hfile, indent, time, type, sep, name):
+def ExtractAnimationDataPerFrames(hfile, indent, time, TypeOfTransform, sep, name):
     format_string = "-{} {}\n+-{}{}\n-{}{}\n"
     args = ["AnimationKey", "{", str(type[0]), ";", str(time[1] - time[0]), ";"]
     IndentFormat(hfile, indent, format_string, args)
@@ -435,7 +434,7 @@ def ExtractAnimationDataPerFrames(hfile, indent, time, type, sep, name):
     for frame in range(time[0], time[1]):
         bpy.context.scene.frame_set(frame)
         args.append(str(frame))
-        r = type[1](obj) #function call
+        r = TypeOfTransform[1](obj) #function call
         format_string += '-{}; ' + r[0] + ';' + sep.popleft() + '\n'
         args.extend(r[1])
     IndentFormat(hfile, indent, format_string, args)
@@ -507,6 +506,11 @@ def GetArmatureAnimation(hfile, indent, time_slot, obj):
         for frame in range(time_slot[0][0], time_slot[1][0] + 1):
             count += 1
         IndentFormat(hfile, indent, "--{};\n", [str(count)])
+        bpy.context.scene.frame_set(time_slot[0][0])
+        if bone.rotation_mode == "QUATERNION":
+            IndentFormat(hfile, indent, "--{}\n", ["// Quaternion rotation wxyz"])
+        elif bone.rotataion_mode == "XYZ":
+            IndentFormat(hfile, indent, "--{}\n", ["// Euler rotation xyz"])
         for frame in range(time_slot[0][0], time_slot[1][0] + 1):
             bpy.context.scene.frame_set(frame)
             if bone.rotation_mode == "QUATERNION":
@@ -712,6 +716,7 @@ def GatherSceneDataThenOutputToFile280(file_name, lhc = False):
 def ExtractObjectsToFile(file_name, objects_to_export):
     if type(objects_to_export) == "dict":
         for name, time_lines in objects_to_export.items():
+            print("--", name)
             if name in bpy.context.scene.objects.keys():
                 pass
             else:
@@ -720,17 +725,17 @@ def ExtractObjectsToFile(file_name, objects_to_export):
         for name, time_lines in objects_to_export.items():
             pass
     else:
-        raise(sUserException("Error expecting a dictionaray.", "ExtractObjectsToFile function."))
+        raise(cUserException("Error expecting a dictionaray.", "ExtractObjectsToFile function."))
         
 if __name__ == "__main__":
-    print("----------------------------------------------------------------")
+    print("------------------------------------------------------------------------")
     try:
         objects_to_export = dict()
         file_name = ""
         if os.name == "nt":
             file_name = os.path.expanduser("~") + "\\Documents\\Blender_Export.txt"
         else:
-            raise(sUserException("Unknown operating system.  Do not have a path to save file.  Exiting.", "main"))
+            raise(cUserException("Unknown operating system.  Do not have a path to save file.  Exiting.", "main"))
         major, minor, sub = bpy.app.version
         if major == 2 and minor == 79 and sub >= 0:
             if len(objects_to_export) == 0:

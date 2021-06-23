@@ -179,7 +179,7 @@ def ExtractMaterials(hfile, indent, obj):
     indent -= 1
     s = "} // End of MeshMaterialList\n"
     Indent(hfile, indent, s)
-    
+
 def GetMatrixOffset(hfile, indent, arm, bone_name):
     # Matrix offset needs more work.  I'm pretty sure it's incorrect.
     matrixoffset = mathutils.Matrix.Identity(4)
@@ -268,7 +268,7 @@ def ExtractVerticesToFile(hfile, indent, obj, lhc):
         args.extend([str(v[i].co.x), str(v[i].co.y), str(v[i].co.z)])
     IndentFormat(hfile, indent, format_string, args)
     del format_string, args, sep, v
-    
+
 def ExtractMeshPolygons(hfile, indent, obj, lhc):
     format_string = '-{};\n'
     args = [str(len(obj.data.polygons))]
@@ -314,7 +314,7 @@ def ExtractMeshPolygons(hfile, indent, obj, lhc):
     del format_string, args
     del sep, sep2, normal_sep
     del face_string, face_args
-    
+
 def ExtractMeshInfoToFile(hfile, obj, matrix, lhc = False):
     if type(hfile).__name__ != "TextIOWrapper":
         return False
@@ -353,7 +353,7 @@ def ExtractMeshInfoToFile(hfile, obj, matrix, lhc = False):
     hfile.write(format_string)
     del format_string
     return True
-    
+
 def ExtractArmaturesInfoToFile(hfile, armatures, lhc = False):
     if type(hfile).__name__ != "TextIOWrapper":
         return False
@@ -456,7 +456,7 @@ def ExtractMarkers(timelines):
     timelines.sort(key=lambda frame : frame[0])
     if timelines[len(timelines) - 1][0] != bpy.context.scene.frame_end:
         timelines.append((bpy.context.scene.frame_end, "End"))
-        
+
 def GetMeshAnimation(hfile, indent, time_slot, obj):
     format_string = ''
     args = []
@@ -508,9 +508,9 @@ def GetArmatureAnimation(hfile, indent, time_slot, obj):
         IndentFormat(hfile, indent, "--{};\n", [str(count)])
         bpy.context.scene.frame_set(time_slot[0][0])
         if bone.rotation_mode == "QUATERNION":
-            IndentFormat(hfile, indent, "--{}\n", ["// Quaternion rotation wxyz"])
+            IndentFormat(hfile, indent, "--{}--{}", ["// Quaternion rotation wxyz\n", "// local bone coordinate axis\n"])
         elif bone.rotataion_mode == "XYZ":
-            IndentFormat(hfile, indent, "--{}\n", ["// Euler rotation xyz"])
+            IndentFormat(hfile, indent, "--{}--{}", ["// Euler rotation xyz\n", "// local bone coordinate axis\n"])
         for frame in range(time_slot[0][0], time_slot[1][0] + 1):
             bpy.context.scene.frame_set(frame)
             if bone.rotation_mode == "QUATERNION":
@@ -550,7 +550,7 @@ def GetArmatureAnimation(hfile, indent, time_slot, obj):
         IndentFormat(hfile, indent, format_string, args)
     del format_string, args
     bpy.context.scene.frame_set(bpy.context.scene.frame_start)
-    
+
 def Markers(hfile, indent, markers, animate_data):
     if len(animate_data["MESH"]) > 0:
         for mesh_name in animate_data["MESH"]:
@@ -604,7 +604,7 @@ def ExtractAnimation(hfile, indent, armatures, mesh, lhc):
     format_string = ''
     args.clear()
     Markers(hfile, indent, markers, animate_data)
-    
+
 def OutputToFile(filename, mesh, armatures, lhc):
     indent = 0
     with open(filename, "w") as hfile:
@@ -672,7 +672,7 @@ def GatherSceneDataThenOutputToFile279(file_name, lhc = False):
         return False
     OutputToFile(file_name, mesh, armatures, lhc)
     return True
-    
+
 def GatherSceneDataThenOutputToFile280(file_name, lhc = False):
     meshes = dict()
     armatures = deque()
@@ -726,7 +726,7 @@ def ExtractObjectsToFile(file_name, objects_to_export):
             pass
     else:
         raise(cUserException("Error expecting a dictionaray.", "ExtractObjectsToFile function."))
-        
+
 if __name__ == "__main__":
     print("------------------------------------------------------------------------")
     try:
